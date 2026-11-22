@@ -163,7 +163,8 @@ def _notify(message, channel, url):
 
 
 # ---------------------------------------------------------------- 主巡检
-def watch_once(use_chain=True, use_basket=False, notify_channel=None, notify_url=None):
+def watch_once(use_chain=True, use_basket=False, notify_channel=None, notify_url=None,
+               force_notify=False):
     now = datetime.datetime.now()
 
     # 1) 实时指数
@@ -253,10 +254,23 @@ def watch_once(use_chain=True, use_basket=False, notify_channel=None, notify_url
         print("  (状态无翻转,无新告警)")
 
     # 6) 推送
-    if alert_rows and notify_channel:
-        msg = f"[期权修复盯盘 {ts}]\n" + "\n".join(
-            f"{r[4]}" for r in alert_rows) + \
-            f"\n修复 {reset_hits}/4 · 风险 {risk_hits}/4 · OPEX {opex.isoformat()}"
+    board_lines = [f"[{'✅' if it['triggered'] else '· '}] {name}  {it['text']}"
+                   for name, it in zip(RESET_SIGNAL_NAMES, reset)]
+    board = "\n".join([
+        f"交易日 {day_iso}({chain_note})",
+        f"VIX {vol_row.get('vix', '--')} | VVIX {vol_row.get('vvix', '--')} | "
+        f"VIX/VIX3M {snap.get('vixvxv', '--')} | GEX {(spx_m or {}).get('gex_b', '--')}B",
+        f"修复 {reset_hits}/4 · 风险 {risk_hits}/4 · "
+        f"距 OPEX {opex.isoformat()} 还有 {(opex - now.date()).days} 天",
+        *board_lines,
+    ])
+    if notify_channel and alert_rows:
+        msg = (f"[期权修复盯盘 {ts}]\n"
+               + "\n".join(r[4] for r in alert_rows) + "\n" + board)
         _notify(msg, notify_channel, notify_url)
+    elif notify_channel and force_notify:
+        # --test:无翻转也发一条状态板,验证推送通路
+        _notify(f"[期权修复盯盘·通路测试 {ts}]\n(无新翻转,此为状态板)\n{board}",
+                notify_channel, notify_url)
     return {"reset_hits": reset_hits, "risk_hits": risk_hits,
             "signals": signals, "alerts": alert_rows}

@@ -119,7 +119,8 @@ def cmd_watch(args):
     notify = args.notify or os.environ.get("USOPTMON_NOTIFY")
     webhook = args.webhook or os.environ.get("USOPTMON_WEBHOOK")
     watch.watch_once(use_chain=not args.no_chain, use_basket=args.basket,
-                     notify_channel=notify, notify_url=webhook)
+                     notify_channel=notify, notify_url=webhook,
+                     force_notify=args.test)
 
 
 def main(argv=None):
@@ -150,6 +151,7 @@ def main(argv=None):
     p.add_argument("--basket", action="store_true", help="顺带更新篮子 P/C(约 40 个请求)")
     p.add_argument("--notify", default=None, choices=["feishu", "bark", "generic", "mail"])
     p.add_argument("--webhook", default=None, help="webhook 地址(bark 填 key 即可)")
+    p.add_argument("--test", action="store_true", help="无翻转也强制发一条状态板(验证通路)")
     p.set_defaults(fn=cmd_watch)
 
     args = ap.parse_args(argv)
