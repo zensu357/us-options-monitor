@@ -1,0 +1,6 @@
+__pycache__/
+raw/
+out/
+*.pyc
+pipeline.log
+article_*.md
