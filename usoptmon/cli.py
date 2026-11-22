@@ -142,6 +142,7 @@ def main(argv=None):
     p.add_argument("--years", type=int, default=2)
     p.add_argument("--light", action="store_true")
     p.add_argument("--no-raw", action="store_true")
+    p.add_argument("--date", default=None, help="报告日期(默认最新)")
     p.set_defaults(fn=None)
 
     p = sub.add_parser("watch", help="修复信号盯盘(边缘触发告警)")

@@ -67,12 +67,14 @@ jobs:
       - name: Full pipeline (EOD)
         if: steps.mode.outputs.mode == 'full'
         run: |
+          set -o pipefail  # 不让 tee 吞掉管道失败
           python3 -m usoptmon run --years 1 --no-raw | tee -a pipeline.log
           python3 -m usoptmon watch | tee -a pipeline.log
 
       - name: Light watch (intraday)
         if: steps.mode.outputs.mode == 'light'
         run: |
+          set -o pipefail
           python3 -m usoptmon watch --no-chain | tee -a pipeline.log
 
       - name: GitHub Step Summary
