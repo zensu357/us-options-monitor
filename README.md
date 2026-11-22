@@ -69,9 +69,28 @@ python3 -m usoptmon watch --notify bark   --webhook <你的BarkKey>
 | `USOPTMON_SMTP_PASS` | **授权码**(不是登录密码);Gmail 用应用专用密码 | — |
 | `USOPTMON_MAIL_TO` | 收件人,逗号分隔可多个 | `a@x.com,b@y.com` |
 
-本地:`export` 上面五个变量 + `USOPTMON_NOTIFY=mail` 后跑 `watch`。
-GitHub Actions:仓库 Settings → Secrets and variables → Actions,逐个添加同名 Secret
-(workflow 已把全部 Secret 映射为环境变量,无需改动)。
+本地:`export` 上面五个变量 + `USOPTMON_NOTIFY=mail` 后跑 `python3 -m usoptmon watch --test`
+(`--test` = 无信号翻转也强发一条状态板,专用于验证通路)。
+
+GitHub Actions:在本机仓库目录逐条执行(gh 会交互式提示粘贴值,授权码不落聊天记录/历史):
+
+```bash
+gh secret set USOPTMON_NOTIFY   --body mail
+gh secret set USOPTMON_SMTP_HOST            # 回车后粘贴 smtp.qq.com
+gh secret set USOPTMON_SMTP_PORT            # 465
+gh secret set USOPTMON_SMTP_USER            # you@qq.com
+gh secret set USOPTMON_SMTP_PASS            # 授权码
+gh secret set USOPTMON_MAIL_TO              # 收件人(逗号分隔可多个)
+```
+
+填完后云端验证一条命令:
+
+```bash
+gh workflow run monitor.yml -f mode=full -f test_notify=true
+gh run watch --exit-status   # 日志出现"[watch] 邮件已发送 -> …"即通路成功
+```
+
+之后定时运行自动生效:信号翻转时标题即告警内容,如 `[期权修复盯盘] 🟢 新触发 R2_VVIX降温`。
 
 ## 云端调度:GitHub Actions(推荐)
 

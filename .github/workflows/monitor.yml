@@ -12,6 +12,10 @@ on:
         description: "light | full"
         default: "full"
         type: string
+      test_notify:
+        description: "true = 额外强发一条状态板推送(验证邮件/飞书/Bark 通路)"
+        default: "false"
+        type: string
 
 permissions:
   contents: write
@@ -69,13 +73,13 @@ jobs:
         run: |
           set -o pipefail  # 不让 tee 吞掉管道失败
           python3 -m usoptmon run --years 1 --no-raw | tee -a pipeline.log
-          python3 -m usoptmon watch | tee -a pipeline.log
+          python3 -m usoptmon watch ${{ inputs.test_notify == 'true' && '--test' || '' }} | tee -a pipeline.log
 
       - name: Light watch (intraday)
         if: steps.mode.outputs.mode == 'light'
         run: |
           set -o pipefail
-          python3 -m usoptmon watch --no-chain | tee -a pipeline.log
+          python3 -m usoptmon watch --no-chain ${{ inputs.test_notify == 'true' && '--test' || '' }} | tee -a pipeline.log
 
       - name: GitHub Step Summary
         if: always()
