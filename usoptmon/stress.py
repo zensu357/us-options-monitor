@@ -259,8 +259,11 @@ def build_snapshot(vol_row, chain_row_spx=None, chain_row_basket=None):
         s["netDelta"] = _f(chain_row_spx.get("netdelta_proxy"))
         s["pc_idx"] = _f(chain_row_spx.get("pc_vol"))
     if chain_row_basket:
-        s["pc_eq"] = _f(chain_row_basket.get("pc_vol"))
-        # 综合 P/C 代理:两口径成交量加权
+        # 覆盖率守卫:篮子只成功少数符号时,其 P/C 不代表"个股篮子",
+        # 宁可置空(判定为 na),也不让残缺样本污染宏观判定。
+        n_sym = _f(chain_row_basket.get("n_symbols"))
+        if n_sym is None or n_sym >= 6:
+            s["pc_eq"] = _f(chain_row_basket.get("pc_vol"))
         cv = (_f(chain_row_spx.get("call_vol")) or 0) + (_f(chain_row_basket.get("call_vol")) or 0)
         pv = (_f(chain_row_spx.get("put_vol")) or 0) + (_f(chain_row_basket.get("put_vol")) or 0)
         s["pc_total"] = round(pv / cv, 4) if cv else None
