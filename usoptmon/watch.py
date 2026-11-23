@@ -202,9 +202,17 @@ def watch_once(use_chain=True, use_basket=False, notify_channel=None, notify_url
     if spx_m:
         day_iso = spx_m["date"]
     else:
-        # 无链模式:交易日取最近实际交易日,避免周末误标"今天"
-        spx_days = [r["date"] for r in store.read("vol_indexes") if r.get("spx")]
-        day_iso = max(spx_days) if spx_days else datetime.date.today().isoformat()
+        # 无链模式:取"当前所属美股交易日"——美东工作日且已过 UTC 12:00
+        # 即视为当日(盘前到盘后全覆盖);否则回退到最近有 SPX 收盘的日期。
+        # 节假日无法自检,会显示当日,属可接受的轻微偏差。
+        from zoneinfo import ZoneInfo
+        et = datetime.datetime.now(ZoneInfo("America/New_York"))
+        is_us_day = et.weekday() < 5 and now.hour >= 12
+        if is_us_day:
+            day_iso = et.date().isoformat()
+        else:
+            spx_days = [r["date"] for r in store.read("vol_indexes") if r.get("spx")]
+            day_iso = max(spx_days) if spx_days else et.date().isoformat()
     reset = snap["checklists"]["reset"]
     risk_hits = sum(1 for it in snap["checklists"]["risk"] if it["triggered"])
     reset_hits = sum(1 for it in reset if it["triggered"])

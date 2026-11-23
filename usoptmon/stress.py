@@ -86,10 +86,12 @@ def eval_indicator(key, s):
             return "na"
         return "red" if v <= t["gex_red"] else ("amber" if v < 0 else "green")
     if key == "dealerGamma":
+        # naive 口径下 dealerGamma 与 SPX GEX 同值,$B per 1% move。
+        # 不可与 Squeezemetrics 的 -8.6B 底线混用(量纲不同),故用同尺度阈值。
         v = _f(s.get("dealerGamma"))
         if v is None:
             return "na"
-        return "red" if v <= t["dealer_gamma_red"] else ("amber" if v < 0 else "green")
+        return "red" if v <= t["gex_red"] else ("amber" if v < 0 else "green")
     if key == "netDelta":
         v = _f(s.get("netDelta"))
         if v is None:
@@ -163,15 +165,15 @@ def detect_regime(s):
     if (pc_idx is not None and pc_eq is not None
             and pc_idx >= t["pc_idx_red"] and pc_eq >= t["pc_eq_red"]):
         macro = True
-    if g["dealerGamma"] is not None and g["dealerGamma"] <= r["dealer_floor"]:
+    # 深度负 Gamma 极值(naive 尺度;-8.6B 属他家口径,不可直接比较)
+    if g["spxGex"] is not None and g["spxGex"] <= r["gex_extreme"]:
         macro = True
 
     dg, sg = g["dealerGamma"], g["spxGex"]
     cond_s3_vol = (g["vix"] is not None and g["vix"] >= r["s3_vix_gate"]
                    and (g["vixvxv"] is not None and g["vixvxv"] >= t["term_red"]
                         or g["vvix"] is not None and g["vvix"] >= t["vvix_red"]))
-    cond_s3_gamma = (dg is not None and sg is not None
-                     and dg <= -4.5 and sg <= t["gex_red"])
+    cond_s3_gamma = sg is not None and sg <= t["gex_red"]
     if cond_s3_vol or cond_s3_gamma:
         title = ("阶段三升级:Vanna 踩踏与宏观全面防御" if macro
                  else "阶段三:负反馈翻转与 Vanna 踩踏加速期")
@@ -213,8 +215,8 @@ def checklists(s):
                  and (_f(s.get("pc_total")) or 0) >= t["pc_total_red"]),
         ("指数 P/C 放量站稳 1.25 上方(宏观全面防御)", None,
          lambda: (_f(s.get("pc_idx")) or 0) >= t["pc_idx_red"]),
-        ("Dealer Agg Gamma 跌穿 -8.6B 历史底线(他家口径,参考)", None,
-         lambda: (_f(s.get("dealerGamma")) or 0) <= config.REGIME["dealer_floor"]),
+        ("SPX GEX 跌破 -100B/1%(深度负 Gamma 极值区)", None,
+         lambda: (_f(s.get("spxGex")) or 0) <= config.REGIME["gex_extreme"]),
         ("VIX>28 且 VIX/VXV>1.00 且 VVIX>=110(Vanna 螺旋强化)", None,
          lambda: (_f(s.get("vix")) or 0) > t["vix_red"]
                  and (_f(s.get("vixvxv")) or 0) > t["term_red"]

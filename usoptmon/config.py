@@ -65,7 +65,8 @@ THRESHOLDS = {
 
 # regime 状态机参数(原版)
 REGIME = {
-    "dealer_floor": -8.6,        # Squeezemetrics 口径历史底线,仅作参考标记
+    "dealer_floor": -8.6,        # Squeezemetrics 口径历史底线,仅作展示参考,不参与判定
+    "gex_extreme": -100.0,       # naive 口径的深度负 Gamma 极值(本口径自定,可随历史重校)
     "s3_vix_gate": 26.0,
     "s1_vix": 18.0,
     "s1_gex": 25.0,
