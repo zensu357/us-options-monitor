@@ -12,7 +12,9 @@
  *   3. Worker → Settings → Variables and Secrets 添加
  *        GH_TOKEN  (Secret)  = 上一步的 PAT
  *        GH_REPO   (Text)    = zensu357/us-options-monitor
- *      → Triggers → Cron Triggers 添加 "0,30 * * * *"(UTC 每半点)
+ *      → Triggers → Cron Triggers 添加 "7,37 * * * *"(UTC 每小时 07/37 分)
+ *         Worker 内部再按 13:00-22:30 UTC 过滤,只在美股时段真正派发。
+ *         22:07 UTC(=17:07 ET)那次会触发 monitor 里的 need-eod 补位,确保收盘数据齐全。
  *
  * 注意:Worker 的 cron 走 UTC 且每小时都会触发,因此"只在美股时段拉数据"
  * 由 monitor workflow 内部逻辑与幂等 upsert 保证——非交易时段跑只会重复
@@ -28,7 +30,7 @@ function inUsSession(now) {
   const h = now.getUTCHours();
   const m = now.getUTCMinutes();
   const t = h * 60 + m;
-  return t >= 13 * 60 && t <= 21 * 60 + 30; // 13:00 - 21:30 UTC
+  return t >= 13 * 60 && t <= 22 * 60 + 30; // 13:00 - 22:30 UTC
 }
 
 export default {
@@ -46,7 +48,7 @@ export default {
         "X-GitHub-Api-Version": "2022-11-28",
         "User-Agent": "usoptmon-cron-worker",
       },
-      body: JSON.stringify({ ref: "main", inputs: { mode: "light" } }),
+      body: JSON.stringify({ ref: "main" }),
     });
     // 204 = 已受理
     console.log("dispatch", res.status, now.toISOString());
