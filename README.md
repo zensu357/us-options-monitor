@@ -94,12 +94,38 @@ gh run watch --exit-status   # 日志出现"[watch] 邮件已发送 -> …"即�
 
 ## 云端调度:GitHub Actions(推荐)
 
-公开仓库标准分钟数无限,git 本身当数据库(data/ 提交回仓库),无需自己的机器开机。
-`.github/workflows/monitor.yml` 已配好双调度:
+> **2026-11-25 起生产调度已切到 Cloudflare Worker**(见下节)。
+> GitHub 自带的 `schedule` 实测**注册要 8~46 小时、丢弃率约 99%、延迟 2~7 小时**,
+> 只能当兜底;真正准点的是 Cloudflare 的 cron。
+> 两条 workflow 保留:GitHub 的 cron 即使偶尔跑一次也无害(数据按日期 upsert 幂等)。
 
-- **盘中轻量巡检** `*/30 14-20 * * 1-5`(UTC):`watch --no-chain`,状态经 actions/cache 传递
-- **收盘后全量** `20 21 * * 1-5`(UTC ≈ ET 16:20 冬令):`run --years 1 --no-raw` + `watch`,
-  数据提交回仓库、报告传 artifact、结果写 Step Summary
+公开仓库标准分钟数无限,git 本身当数据库(data/ 提交回仓库),无需自己的机器开机。
+`.github/workflows/` 已拆成两个文件:
+
+- **`monitor.yml`** `7,37 14-20 * * 1-5`(UTC):`watch --no-chain` 轻量巡检,
+  并带 **need-eod 自愈**——若"美股已收盘但当日缺完整日线"就补跑全量并提交
+- **`eod.yml`** `23 21 * * 1-5`(UTC):`run` 全量 + `watch`,提交 data/、传 artifact
+
+拆成两个文件的原因:GitHub 的 cron 延迟可达数小时,若靠"当前几点"推断该跑全量
+还是轻量,延迟一跨界就会判断错(这个 bug 实际发生过两天,收盘任务全被当成轻量)。
+
+## Cloudflare Worker 准点触发(生产调度)
+
+`infra/cloudflare-worker-cron.js`,已部署为 **usoptmon-cron**
+(`https://usoptmon-cron.3194017853.workers.dev/`,访问该 URL 可自检:
+返回 `Repo: ... | token set: true`)。
+
+| 配置 | 值 |
+| --- | --- |
+| Cron 触发器 | `7,37 * * * *`(UTC 每小时 07/37 分) |
+| 时段过滤 | 仅 13:00–22:30 UTC 真正派发(其余直接 skip) |
+| 变量 `GH_REPO` | `zensu357/us-options-monitor`(密钥类型) |
+| 变量 `GH_TOKEN` | fine-grained PAT,仅该仓库 `Actions: Read and write`,90 天有效 |
+| 触发对象 | `POST .../actions/workflows/monitor.yml/dispatches` body `{"ref":"main"}` |
+
+要点:workflow 的 `workflow_dispatch` **不接受多余 inputs**(传 `mode` 会 422),
+所以 Worker 只发 `ref`;全量/轻量由选了哪个 workflow 文件决定,而非时间。
+22:07 UTC(17:07 ET)那次经 need-eod 补位,保证收盘数据齐全。
 
 启用(本工作区不动 git,由你自己推):
 
