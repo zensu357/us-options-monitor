@@ -1,20 +1,16 @@
+# 盘中轻量巡检:只盯修复信号(R2/R3/R4),不拉期权链。
+# 全量任务已拆到 eod.yml —— 本文件永远只做轻量,与触发延迟无关。
 name: monitor
 
 on:
   schedule:
-    # 盘中轻量巡检(UTC)。刻意避开 :00/:30——GitHub 官方说明整点/半点为
-    # 调度高峰,排队任务可能被直接丢弃,故取偏移分钟 :07/:37。
+    # UTC 14:07 - 20:37 每半小时(冬令时覆盖美股 09:00-15:30 ET)。
+    # 避开 :00/:30 —— GitHub 官方说明整点/半点为调度高峰,任务可能被丢弃。
     - cron: "7,37 14-20 * * 1-5"
-    # 收盘后全量(UTC 21:23 ≈ 冬令时 ET 16:23)
-    - cron: "23 21 * * 1-5"
   workflow_dispatch:
     inputs:
-      mode:
-        description: "light | full"
-        default: "full"
-        type: string
       test_notify:
-        description: "true = 额外强发一条状态板推送(验证邮件/飞书/Bark 通路)"
+        description: "true = 额外强发一条状态板推送(验证推送通路)"
         default: "false"
         type: string
 
@@ -29,7 +25,6 @@ jobs:
   monitor:
     runs-on: ubuntu-latest
     env:
-      # 推送配置走仓库 Secrets,未设置时为空串,推送自动跳过
       USOPTMON_NOTIFY: ${{ secrets.USOPTMON_NOTIFY }}
       USOPTMON_WEBHOOK: ${{ secrets.USOPTMON_WEBHOOK }}
       USOPTMON_SMTP_HOST: ${{ secrets.USOPTMON_SMTP_HOST }}
@@ -46,21 +41,7 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Resolve mode
-        id: mode
-        run: |
-          if [ "${{ github.event_name }}" = "schedule" ]; then
-            if [ "${{ github.event.schedule }}" = "20 21 * * 1-5" ]; then
-              echo "mode=full" >> "$GITHUB_OUTPUT"
-            else
-              echo "mode=light" >> "$GITHUB_OUTPUT"
-            fi
-          else
-            echo "mode=${{ inputs.mode || 'full' }}" >> "$GITHUB_OUTPUT"
-          fi
-
-      # 盯盘状态(alert_state/alerts)在盘中各次运行间经 actions/cache 传递;
-      # 收盘后全量运行把它们与数据一起提交回仓库。
+      # 盯盘状态(alert_state/alerts)在多次运行之间经 cache 传递
       - name: Restore watch state
         uses: actions/cache/restore@v4
         with:
@@ -69,49 +50,23 @@ jobs:
           restore-keys: |
             watch-
 
-      - name: Full pipeline (EOD)
-        if: steps.mode.outputs.mode == 'full'
-        run: |
-          set -o pipefail  # 不让 tee 吞掉管道失败
-          python3 -m usoptmon run --years 1 --no-raw | tee -a pipeline.log
-          python3 -m usoptmon watch ${{ inputs.test_notify == 'true' && '--test' || '' }} | tee -a pipeline.log
-
-      - name: Light watch (intraday)
-        if: steps.mode.outputs.mode == 'light'
+      - name: Light watch
         run: |
           set -o pipefail
           python3 -m usoptmon watch --no-chain ${{ inputs.test_notify == 'true' && '--test' || '' }} | tee -a pipeline.log
 
-      - name: GitHub Step Summary
+      - name: Step summary
         if: always()
         run: |
           {
-            echo "## usoptmon $(date -u +%Y-%m-%dT%H:%MZ) (mode: ${{ steps.mode.outputs.mode }})"
-            echo ''
+            echo "## usoptmon intraday $(date -u +%Y-%m-%dT%H:%MZ)"
             echo '```'
             cat pipeline.log 2>/dev/null || echo '(no output)'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Commit data (EOD)
-        if: steps.mode.outputs.mode == 'full'
-        run: |
-          git config user.name "usoptmon-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add data
-          git commit -m "eod $(date -u +%F)" || echo "no changes"
-          git push
 
       - name: Save watch state
         uses: actions/cache/save@v4
         with:
           path: data
           key: watch-${{ github.run_id }}
-
-      - name: Upload report artifact (EOD)
-        if: steps.mode.outputs.mode == 'full'
-        uses: actions/upload-artifact@v4
-        with:
-          name: report
-          path: out/
-          retention-days: 30

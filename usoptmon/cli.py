@@ -6,6 +6,15 @@ import datetime
 from . import backtest, cboe, config, report, stress, store, yahoo
 
 
+CORE_FIELDS = ("vix", "vvix", "vix9d", "vix3m")
+
+
+def _core_ok(row):
+    """判断某日是否为"完整日线"。Yahoo 在盘中/盘前会返回残缺的当日 bar,
+    只含部分指数;这种半成品不能参与评分,否则会污染阶段判定。"""
+    return all(row.get(k) not in (None, "") for k in CORE_FIELDS)
+
+
 def _latest_chain_rows(day_iso, _cache={"loaded": False, "rows": None}):
     """取指定日期的 SPX / 篮子汇总 chain_metrics 行(整表仅读一次)。"""
     if not _cache["loaded"]:
@@ -28,8 +37,9 @@ def _basket_summary(chains):
 
 
 def _latest_trade_day():
-    """最新交易日:取 vol_indexes 里带 SPX 收盘的最近日期(周六运行=周五)。"""
-    days = [r["date"] for r in store.read("vol_indexes") if r.get("spx")]
+    """最新交易日:最近一个"SPX 与核心波动率齐全"的日期。"""
+    days = [r["date"] for r in store.read("vol_indexes")
+            if r.get("spx") and _core_ok(r)]
     return max(days) if days else datetime.date.today().isoformat()
 
 
@@ -58,6 +68,10 @@ def cmd_score(args):
     if not vol:
         print("[score] vol_indexes.csv 为空,先运行 collect")
         return
+    skipped = [r["date"] for r in vol if not _core_ok(r)]
+    vol = [r for r in vol if _core_ok(r)]
+    if skipped:
+        print(f"[score] 跳过 {len(skipped)} 个残缺日: {', '.join(skipped[-3:])}")
     chain_days = {r["date"] for r in store.read("chain_metrics")}
 
     # 1) 全历史逐日打分(缺链数据的日期自动归一为"仅波动率"口径)
@@ -93,9 +107,9 @@ def cmd_score(args):
 
 
 def cmd_report(args):
-    vol = {r["date"]: r for r in store.read("vol_indexes")}
+    vol = {r["date"]: r for r in store.read("vol_indexes") if _core_ok(r)}
     if not vol:
-        print("[report] 无数据,先运行 collect")
+        print("[report] 无完整日线数据,先运行 collect")
         return
     day = args.date or max(vol)
     spx_row, basket_row = _chain_rows_for_date(day)
