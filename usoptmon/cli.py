@@ -122,6 +122,33 @@ def cmd_report(args):
     print(f"[report] {path}")
 
 
+def cmd_need_eod(args):
+    """退出码 0 = 需要补跑收盘全量;1 = 不需要。
+
+    判据:美股已收盘(ET 16:05 之后)且本地还没有"今天"的完整日线。
+    这条命令给 CI 用——GitHub 的 cron 丢弃率很高,收盘任务可能被跳过,
+    盘中任务每次运行都顺手检查一次,起到自动补位的作用。
+    """
+    import sys
+    from zoneinfo import ZoneInfo
+
+    et = datetime.datetime.now(ZoneInfo("America/New_York"))
+    if et.weekday() >= 5:
+        print(f"need-eod: no (weekend {et:%Y-%m-%d})")
+        return 1
+    if (et.hour, et.minute) < (16, 5):
+        print(f"need-eod: no (US session not closed, ET {et:%H:%M})")
+        return 1
+    today = et.date().isoformat()
+    have = {r["date"] for r in store.read("vol_indexes")
+            if r.get("spx") and _core_ok(r)}
+    if today in have:
+        print(f"need-eod: no (already have {today})")
+        return 1
+    print(f"need-eod: YES (ET {et:%H:%M}, missing {today})")
+    return 0
+
+
 def cmd_backtest(args):
     backtest.run()
 
@@ -153,6 +180,9 @@ def main(argv=None):
     p.set_defaults(fn=cmd_report)
     sub.add_parser("backtest", help="事件研究回测").set_defaults(fn=cmd_backtest)
 
+    p = sub.add_parser("need-eod", help="判断是否需要补跑收盘全量(退出码 0=需要)")
+    p.set_defaults(fn=cmd_need_eod)
+
     p = sub.add_parser("run", help="全流程 collect + score + report")
     p.add_argument("--years", type=int, default=2)
     p.add_argument("--light", action="store_true")
@@ -173,6 +203,9 @@ def main(argv=None):
         cmd_collect(args)
         cmd_score(args)
         cmd_report(args)
+    elif args.cmd == "need-eod":
+        import sys
+        sys.exit(args.fn(args))
     else:
         args.fn(args)
 
