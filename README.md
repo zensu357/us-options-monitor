@@ -165,7 +165,8 @@ GitHub 自带 cron（monitor.yml / eod.yml）              ← 仅兜底，跑�
 
 | 现象 | 原因 | 处置 |
 | --- | --- | --- |
-| **Cloudflare cron 完全不触发** | **在 Cloudflare 后台部署新版本会清空 cron 触发器**（实测：加完触发器后又部署了两次，触发器被抹掉，Worker 24 小时内 0 次 scheduled 调用） | **每次部署后必须回 Settings → 触发事件 → Cron 触发器重新添加**。用 `wrangler deploy` 可把 `[triggers] crons` 写进配置文件，避免这个坑 |
+| **Cloudflare cron 完全不触发** | 两个先后踩到的坑：①添加/修改触发器后**必须点页面底部「保存」**，否则只存在于表单里，刷新即消失（界面显示"下次 09:37"并不代表已落库）；②新注册的触发器**还需要再部署一次 Worker 才开始执行**（实测：07:22 注册 → 07:33 部署 → 07:35 才出现第一次 scheduled 调用） | 加/改触发器 → 点「保存」→ 再部署一次。验证：`GET /api/v4/accounts/{acct}/workers/scripts/{name}/schedules` 看调度表，或 Observability → Events 里看有没有 scheduled 调用 |
+| 怀疑 Worker 能连通但没派发 | 需要区分"cron 没调用"与"调用了但 dispatch 失败" | 临时在 `fetch` 里加一个带密钥的测试分支，直接返回 GitHub 的响应码（`204` = 通路正常）；或用 `curl '<worker>?go=1'` 验证。**已验证本 Worker 返回 204** |
 | GitHub `schedule` 长期不触发 | 新仓库 cron **注册需 8~46 小时**，之后**丢弃率约 99%、延迟 2~7 小时** | 生产调度改走 Cloudflare；GitHub cron 留作兜底（数据按日期 upsert，幂等） |
 | 收盘数据缺失一天 | 调度被丢弃且当日无任何巡检 | `need-eod` 会在下一次巡检自动补跑；也可手动 `python3 -m usoptmon run` |
 | CSV 列顺序漂移 | 旧版 `store.write` 用"首行键顺序"当表头，不同调用方 dict 顺序不同 → 表头旋转（曾让 `date` 列跑到第 13 列） | 已固定 `date, symbol` 在前、其余字母序 |
