@@ -41,11 +41,12 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      # 盯盘状态(alert_state/alerts)在多次运行之间经 cache 传递
+      # 只缓存盯盘状态(state/),绝不缓存 data/——缓存里的旧数据会覆盖
+      # git 中的新版本,把已清理的行复活。
       - name: Restore watch state
         uses: actions/cache/restore@v4
         with:
-          path: data
+          path: state
           key: watch-${{ github.run_id }}
           restore-keys: |
             watch-
@@ -66,7 +67,7 @@ jobs:
             python3 -m usoptmon watch | tee -a pipeline.log
             git config user.name "usoptmon-bot"
             git config user.email "actions@users.noreply.github.com"
-            git add data
+            git add data state
             git commit -m "eod catch-up $(date -u +%F)" || echo "no changes"
             git push || echo "push skipped"
           else
@@ -86,5 +87,5 @@ jobs:
       - name: Save watch state
         uses: actions/cache/save@v4
         with:
-          path: data
+          path: state
           key: watch-${{ github.run_id }}

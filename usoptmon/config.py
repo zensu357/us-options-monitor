@@ -9,6 +9,9 @@ BASE = pathlib.Path(__file__).resolve().parent.parent
 DATA = BASE / "data"
 OUT = BASE / "out"
 RAW = BASE / "raw"
+# 盯盘状态单独放 state/,不进 data/ —— 否则 CI 里 actions/cache 恢复整个
+# data/ 会覆盖 git 中的新版本(曾把已删除的脏行复活)。
+STATE = BASE / "state"
 
 # 原始期权链 JSON 保留天数(每份 SPX 链约 15MB)
 KEEP_RAW_DAYS = 10

@@ -69,8 +69,13 @@ def _next_opex(day):
 
 # ---------------------------------------------------------------- 告警状态
 def _state_path():
-    config.DATA.mkdir(parents=True, exist_ok=True)
-    return config.DATA / "alert_state.json"
+    config.STATE.mkdir(parents=True, exist_ok=True)
+    p = config.STATE / "alert_state.json"
+    if not p.exists():
+        legacy = config.DATA / "alert_state.json"   # 旧位置,迁移一次
+        if legacy.exists():
+            p.write_text(legacy.read_text(encoding="utf-8"), encoding="utf-8")
+    return p
 
 
 def _load_state():
@@ -88,7 +93,8 @@ def _save_state(state):
 def _append_alerts(rows):
     if not rows:
         return
-    p = config.DATA / "alerts.csv"
+    config.STATE.mkdir(parents=True, exist_ok=True)
+    p = config.STATE / "alerts.csv"
     new_file = not p.exists()
     with open(p, "a", newline="", encoding="utf-8") as f:
         w = csv.writer(f)

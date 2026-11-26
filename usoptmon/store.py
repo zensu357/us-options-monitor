@@ -20,16 +20,20 @@ def read(name):
         return list(csv.DictReader(f))
 
 
+PREFERRED = ("date", "symbol")   # 表头固定前两列,避免列顺序随写入路径漂移
+
+
 def write(name, rows, fieldnames=None):
     if not rows:
         return
     if fieldnames is None:
-        seen = []
+        # 稳定列序:先 date/symbol,其余按字母序。否则不同调用方 dict
+        # 的键顺序不同,表头会逐次旋转(曾导致 date 列跑到第 13 列)。
+        keys = set()
         for r in rows:
-            for k in r:
-                if k not in seen:
-                    seen.append(k)
-        fieldnames = seen
+            keys.update(r.keys())
+        head = [k for k in PREFERRED if k in keys]
+        fieldnames = head + sorted(keys - set(head))
     with open(_path(name), "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         w.writeheader()
