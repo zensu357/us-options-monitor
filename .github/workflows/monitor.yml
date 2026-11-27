@@ -65,6 +65,7 @@ jobs:
             echo ">>> 补跑收盘全量" | tee -a pipeline.log
             python3 -m usoptmon run --years 1 --no-raw | tee -a pipeline.log
             python3 -m usoptmon watch | tee -a pipeline.log
+            python3 -m usoptmon mark-eod | tee -a pipeline.log
             git config user.name "usoptmon-bot"
             git config user.email "actions@users.noreply.github.com"
             git add data state

@@ -122,14 +122,29 @@ def cmd_report(args):
     print(f"[report] {path}")
 
 
+def _eod_attempt_path():
+    config.STATE.mkdir(parents=True, exist_ok=True)
+    return config.STATE / "eod_attempts.json"
+
+
+def _eod_last_attempt():
+    import json
+    try:
+        return json.loads(_eod_attempt_path().read_text(encoding="utf-8")).get("last")
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def cmd_need_eod(args):
     """退出码 0 = 需要补跑收盘全量;1 = 不需要。
 
-    判据:美股已收盘(ET 16:05 之后)且本地还没有"今天"的完整日线。
-    这条命令给 CI 用——GitHub 的 cron 丢弃率很高,收盘任务可能被跳过,
-    盘中任务每次运行都顺手检查一次,起到自动补位的作用。
+    判据:美股已收盘(ET 16:05 之后)、本地还没有"今天"的完整日线,
+    且今天还没尝试过补跑。
+
+    最后一条很关键:休市日(如感恩节)Yahoo 永远拿不到完整 bar,
+    若不加限制,每个巡检槽位都会全量重跑一遍(实测一天 19 次 × 15MB),
+    毫无意义。同一天只尝试一次即可。
     """
-    import sys
     from zoneinfo import ZoneInfo
 
     et = datetime.datetime.now(ZoneInfo("America/New_York"))
@@ -140,12 +155,30 @@ def cmd_need_eod(args):
         print(f"need-eod: no (US session not closed, ET {et:%H:%M})")
         return 1
     today = et.date().isoformat()
+    if _eod_last_attempt() == today:
+        print(f"need-eod: no (already attempted today {today}, likely a market holiday)")
+        return 1
     have = {r["date"] for r in store.read("vol_indexes")
             if r.get("spx") and _core_ok(r)}
     if today in have:
         print(f"need-eod: no (already have {today})")
         return 1
     print(f"need-eod: YES (ET {et:%H:%M}, missing {today})")
+    return 0
+
+
+def cmd_mark_eod(args):
+    """记录"今天已尝试过补跑",避免休市日反复全量重跑。"""
+    import json
+    from zoneinfo import ZoneInfo
+
+    today = datetime.datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    _eod_attempt_path().write_text(
+        json.dumps({"last": today,
+                    "ts": datetime.datetime.now().isoformat(timespec="seconds")},
+                   ensure_ascii=False),
+        encoding="utf-8")
+    print(f"mark-eod: recorded {today}")
     return 0
 
 
@@ -183,6 +216,9 @@ def main(argv=None):
     p = sub.add_parser("need-eod", help="判断是否需要补跑收盘全量(退出码 0=需要)")
     p.set_defaults(fn=cmd_need_eod)
 
+    p = sub.add_parser("mark-eod", help="记录当日已尝试补跑(休市日限流用)")
+    p.set_defaults(fn=cmd_mark_eod)
+
     p = sub.add_parser("run", help="全流程 collect + score + report")
     p.add_argument("--years", type=int, default=2)
     p.add_argument("--light", action="store_true")
@@ -203,7 +239,7 @@ def main(argv=None):
         cmd_collect(args)
         cmd_score(args)
         cmd_report(args)
-    elif args.cmd == "need-eod":
+    elif args.cmd in ("need-eod", "mark-eod"):
         import sys
         sys.exit(args.fn(args))
     else:
