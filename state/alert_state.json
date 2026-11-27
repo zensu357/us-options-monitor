@@ -1,4 +1,17 @@
 {
- "signals": {},
- "strong_on": false
+ "signals": {
+  "R2_VVIX降温": {
+   "on": true,
+   "last_day": "2026-11-27"
+  },
+  "R4_离散止血": {
+   "on": true,
+   "last_day": "2026-11-27"
+  },
+  "R1_GEX重置回拉": {
+   "on": true,
+   "last_day": "2026-11-27"
+  }
+ },
+ "strong_on": true
 }
