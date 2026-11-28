@@ -185,12 +185,24 @@ def detect_regime(s):
         return {"stage": 1, "title": "阶段一:缩圈与离散稳态期",
                 "color": "green", "macroDefense": False}
 
-    if (g["vixvxv"] is not None and g["vvix"] is not None and g["skew"] is not None
-            and g["netDelta"] is not None and g["spxGex"] is not None and g["vixeqVix"] is not None
-            and g["vixvxv"] < t["term_red"] and g["vvix"] < t["vvix_red"]
-            and g["skew"] < r["s4_skew"] and g["netDelta"] >= 0
-            and g["spxGex"] < r["s4_gex"] and g["vixeqVix"] < r["s4_vixeq"]):
+    # 阶段四(严格):全部条件正常化 —— 原版定义
+    strict4 = (g["vixvxv"] is not None and g["vvix"] is not None and g["skew"] is not None
+               and g["netDelta"] is not None and g["spxGex"] is not None and g["vixeqVix"] is not None
+               and g["vixvxv"] < t["term_red"] and g["vvix"] < t["vvix_red"]
+               and g["skew"] < r["s4_skew"] and g["netDelta"] >= 0
+               and g["spxGex"] < r["s4_gex"] and g["vixeqVix"] < r["s4_vixeq"])
+    if strict4:
         return {"stage": 4, "title": "阶段四:极端出清与反向 Vanna 修复期",
+                "color": "blue", "macroDefense": False}
+
+    # 阶段四(修复确认旁路):checklist 已 ≥3/4,但相关性等尚未完全正常化
+    # (实测 VIXEQ/VIX 2.0113 卡在 2.0 边界时,原状态机落兜底"阶段二",
+    #  与"修复确认"邮件自相矛盾)。止血可以先于正常化,故放行并标注缺口。
+    ck = checklists(s)
+    reset_hits = sum(1 for it in ck["reset"] if it["triggered"])
+    if reset_hits >= 3:
+        return {"stage": 4,
+                "title": f"阶段四:反向 Vanna 修复确认期(修复 {reset_hits}/4)",
                 "color": "blue", "macroDefense": False}
 
     return {"stage": 2, "title": "阶段二:拥挤见顶与先遣撤退期",
